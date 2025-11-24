@@ -95,7 +95,7 @@ app.post(
 
       try {
         // Call your InfinityFree endpoint to update orders
-        await fetch("https://YOUR-INFINITYFREE-DOMAIN.com/api/confirm_order.php", {
+        await fetch("https://revaux.infinityfree.me/hooks/stripe_confirm.php", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-API-KEY": process.env.INF_API_KEY },
           body: JSON.stringify(payload)
@@ -151,6 +151,7 @@ app.post("/verify-payment", express.json(), async (req, res) => {
 });
 
 app.listen(10000, () => console.log("Server running on port 10000"));
+
 
 
 
