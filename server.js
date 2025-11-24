@@ -80,5 +80,44 @@ app.post(
   }
 );
 
+// ---- Verify PaymentIntent (called by payment_success.php) ----
+app.post("/verify-payment", express.json(), async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+
+    if (!paymentIntentId) {
+      return res.status(400).json({ error: "paymentIntentId is required" });
+    }
+
+    // Retrieve PaymentIntent from Stripe
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    // Extract important fields
+    const status = pi.status;
+    const amount = pi.amount;              // in centavos
+    const currency = pi.currency;
+    const receiptUrl =
+      pi.charges?.data?.[0]?.receipt_url || null;
+    const paymentMethod =
+      pi.charges?.data?.[0]?.payment_method_details?.card?.brand || "unknown";
+
+    // Convert amount to PHP pesos
+    const amountPHP = amount / 100;
+
+    return res.json({
+      status,
+      amountPHP,
+      currency,
+      receipt_url: receiptUrl,
+      payment_method: paymentMethod
+    });
+
+  } catch (err) {
+    console.error("Verify error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(10000, () => console.log("Server running on port 10000"));
+
 
