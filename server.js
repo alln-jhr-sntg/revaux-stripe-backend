@@ -53,6 +53,7 @@ app.post(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
             "X-API-KEY": process.env.INF_API_KEY
           },
           body: JSON.stringify(payload)
@@ -145,4 +146,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(10000, () => console.log("Server running on port 10000"));
+
 
