@@ -18,20 +18,25 @@ async function convertPHPtoUSD(amountPHP) {
   return amountPHP * data.rates.USD;
 }
 
-// ---- Create PaymentIntent ----
+// ---- Create PaymentIntent (PHP currency) ----
 app.post("/create-payment", async (req, res) => {
   try {
-    const { amountPHP } = req.body;
+    const { amountPHP, customer_id, cart_id, shipping_fee } = req.body;
 
-    const usd = await convertPHPtoUSD(amountPHP);
-    const amountUSD = Math.round(usd * 100);
+    if (!amountPHP) {
+      return res.status(400).json({ error: "amountPHP is required" });
+    }
+
+    // Convert PHP → centavos
+    const amountInCentavos = Math.round(amountPHP * 100);
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountUSD,
-      currency: "usd",
+      amount: amountInCentavos,
+      currency: "php",   // ✔ native PHP currency
       metadata: {
-        // Add anything you need here
-        amountPHP,
+        customer_id,
+        cart_id,
+        shipping_fee,
       },
     });
 
@@ -39,10 +44,13 @@ app.post("/create-payment", async (req, res) => {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
     });
+
   } catch (err) {
+    console.error("Payment error:", err);
     return res.status(500).json({ error: err.message });
   }
 });
+
 
 // ---- Stripe Webhook (raw body ONLY) ----
 app.post(
@@ -73,3 +81,4 @@ app.post(
 );
 
 app.listen(10000, () => console.log("Server running on port 10000"));
+
