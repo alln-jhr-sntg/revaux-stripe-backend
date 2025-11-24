@@ -99,6 +99,26 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
       status: "paid"
     };
 
+    try {
+      const response = await fetch(
+        "https://revaux.infinityfree.me/hooks/stripe_confirm.php?i=1",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "X-API-KEY": process.env.INF_API_KEY
+          },
+          body: JSON.stringify(payload)
+        }
+      );
+    
+      const txt = await response.text();
+      console.log("InfinityFree says:", txt);
+    } catch (err) {
+      console.error("❌ Failed to notify InfinityFree:", err.message);
+    }
+
     // Attempt direct DB write if DB env provided
     const DB_HOST = process.env.DB_HOST;
     if (DB_HOST && process.env.DB_NAME && process.env.DB_USER) {
@@ -217,3 +237,4 @@ app.get("/", (req, res) => res.json({ status: "ok", message: "Stripe backend run
 // start
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => log(`Server running on port ${PORT}`));
+
