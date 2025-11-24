@@ -49,7 +49,7 @@ app.post(
       };
 
       try {
-        await fetch("https://revaux.infinityfree.me/hooks/stripe_confirm.php", {
+        await fetch("http://revaux.infinityfree.me/hooks/stripe_confirm.php", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -145,3 +145,4 @@ app.get("/", (req, res) => {
 });
 
 app.listen(10000, () => console.log("Server running on port 10000"));
+
