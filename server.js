@@ -52,11 +52,11 @@ app.post("/create-payment", async (req, res) => {
 });
 
 
-// ---- Stripe Webhook (raw body ONLY) ----
+// ---- Stripe Webhook (Raw Body Required) ----
 app.post(
   "/webhook",
   bodyParser.raw({ type: "application/json" }),
-  (req, res) => {
+  async (req, res) => {
     const sig = req.headers["stripe-signature"];
 
     let event;
@@ -67,18 +67,50 @@ app.post(
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } catch (err) {
-      console.error(err);
+      console.error("Webhook signature error:", err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
+    // Handle successful payment
     if (event.type === "payment_intent.succeeded") {
       const intent = event.data.object;
-      console.log("Payment successful:", intent.id);
+
+      console.log("✔ Payment succeeded:", intent.id);
+
+      // Extract metadata
+      const customer_id = intent.metadata.customer_id;
+      const cart_id = intent.metadata.cart_id;
+      const shipping_fee = intent.metadata.shipping_fee;
+      const amountPHP = intent.amount / 100; // Stripe stores in centavos
+
+      // Prepare payload to InfinityFree
+      const payload = {
+        payment_intent_id: intent.id,
+        customer_id,
+        cart_id,
+        shipping_fee,
+        amountPHP,
+        status: "paid"
+      };
+
+      try {
+        // Call your InfinityFree endpoint to update orders
+        await fetch("https://YOUR-INFINITYFREE-DOMAIN.com/api/confirm_order.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-KEY": process.env.INF_API_KEY },
+          body: JSON.stringify(payload)
+        });
+
+        console.log("✔ Order updated on InfinityFree.");
+      } catch (err) {
+        console.error("❌ Failed to notify InfinityFree:", err.message);
+      }
     }
 
     res.json({ received: true });
   }
 );
+
 
 // ---- Verify PaymentIntent (called by payment_success.php) ----
 app.post("/verify-payment", express.json(), async (req, res) => {
@@ -119,5 +151,6 @@ app.post("/verify-payment", express.json(), async (req, res) => {
 });
 
 app.listen(10000, () => console.log("Server running on port 10000"));
+
 
 
