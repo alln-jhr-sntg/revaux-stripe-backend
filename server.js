@@ -99,7 +99,7 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
       status: "paid"
     };
     
-    console.log("API KEY (raw)=", JSON.stringify(process.env.INF_API_KEY));
+    console.log("API KEY (raw)=", JSON.stringify((process.env.INF_API_KEY || "").trim()));
 
     try {
       const response = await fetch(
@@ -109,7 +109,7 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
           headers: {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0",
-            "X-API-KEY": process.env.INF_API_KEY
+            "X-API-KEY": (process.env.INF_API_KEY || "").trim()
           },
           body: JSON.stringify(payload)
         }
@@ -239,5 +239,6 @@ app.get("/", (req, res) => res.json({ status: "ok", message: "Stripe backend run
 // start
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => log(`Server running on port ${PORT}`));
+
 
 
