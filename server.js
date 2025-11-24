@@ -43,22 +43,25 @@ app.post(
         payment_intent_id: intent.id,
         customer_id,
         cart_id,
-        shipping_fee,
         amountPHP,
-        status: "paid"
       };
 
       try {
-        await fetch("http://revaux.infinityfree.me/hooks/stripe_confirm.php", {
+        const r = await fetch("http://revaux.infinityfree.me/hooks/stripe_confirm.php", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Origin": "http://revaux.infinityfree.me",
+            "Referer": "http://revaux.infinityfree.me/",
             "X-API-KEY": process.env.INF_API_KEY
           },
           body: JSON.stringify(payload)
         });
-
+      
+        console.log("∞ InfinityFree says:", await r.text());
         console.log("✔ Order updated on InfinityFree.");
       } catch (err) {
         console.error("❌ Failed to notify InfinityFree:", err.message);
@@ -146,5 +149,6 @@ app.get("/", (req, res) => {
 });
 
 app.listen(10000, () => console.log("Server running on port 10000"));
+
 
 
