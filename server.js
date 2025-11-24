@@ -4,55 +4,11 @@ import cors from "cors";
 import bodyParser from "body-parser";
 
 const app = express();
-app.use(cors());
-app.use(express.json()); // JSON parsing for normal routes
-
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
-// Convert PHP → USD
-async function convertPHPtoUSD(amountPHP) {
-  const res = await fetch(
-    "https://api.exchangerate.host/latest?base=PHP&symbols=USD"
-  );
-  const data = await res.json();
-  return amountPHP * data.rates.USD;
-}
-
-// ---- Create PaymentIntent (PHP currency) ----
-app.post("/create-payment", async (req, res) => {
-  try {
-    const { amountPHP, customer_id, cart_id, shipping_fee } = req.body;
-
-    if (!amountPHP) {
-      return res.status(400).json({ error: "amountPHP is required" });
-    }
-
-    // Convert PHP → centavos
-    const amountInCentavos = Math.round(amountPHP * 100);
-
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCentavos,
-      currency: "php",   // ✔ native PHP currency
-      metadata: {
-        customer_id,
-        cart_id,
-        shipping_fee,
-      },
-    });
-
-    return res.json({
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
-    });
-
-  } catch (err) {
-    console.error("Payment error:", err);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-
-// ---- Stripe Webhook (Raw Body Required) ----
+// ---------------------------------------------------------
+// 1️⃣ HANDLE WEBHOOK FIRST! NO express.json() BEFORE THIS
+// ---------------------------------------------------------
 app.post(
   "/webhook",
   bodyParser.raw({ type: "application/json" }),
@@ -62,7 +18,7 @@ app.post(
     let event;
     try {
       event = stripe.webhooks.constructEvent(
-        req.body,
+        req.body, // MUST be raw Buffer
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
       );
@@ -71,19 +27,18 @@ app.post(
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // Handle successful payment
+    // Stripe event: payment succeeded
     if (event.type === "payment_intent.succeeded") {
       const intent = event.data.object;
 
       console.log("✔ Payment succeeded:", intent.id);
 
-      // Extract metadata
+      // extract metadata
       const customer_id = intent.metadata.customer_id;
       const cart_id = intent.metadata.cart_id;
       const shipping_fee = intent.metadata.shipping_fee;
-      const amountPHP = intent.amount / 100; // Stripe stores in centavos
+      const amountPHP = intent.amount / 100;
 
-      // Prepare payload to InfinityFree
       const payload = {
         payment_intent_id: intent.id,
         customer_id,
@@ -94,10 +49,12 @@ app.post(
       };
 
       try {
-        // Call your InfinityFree endpoint to update orders
         await fetch("https://revaux.infinityfree.me/hooks/stripe_confirm.php", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-API-KEY": process.env.INF_API_KEY },
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-KEY": process.env.INF_API_KEY
+          },
           body: JSON.stringify(payload)
         });
 
@@ -111,9 +68,46 @@ app.post(
   }
 );
 
+// ---------------------------------------------------------
+// 2️⃣ NORMAL MIDDLEWARE (safe AFTER webhook)
+// ---------------------------------------------------------
+app.use(cors());
+app.use(express.json()); // OK for normal endpoints now
 
-// ---- Verify PaymentIntent (called by payment_success.php) ----
-app.post("/verify-payment", express.json(), async (req, res) => {
+// ---------------------------------------------------------
+// 3️⃣ CREATE PAYMENTINTENT (normal JSON route)
+// ---------------------------------------------------------
+app.post("/create-payment", async (req, res) => {
+  try {
+    const { amountPHP, customer_id, cart_id, shipping_fee } = req.body;
+
+    if (!amountPHP) {
+      return res.status(400).json({ error: "amountPHP is required" });
+    }
+
+    const amountInCentavos = Math.round(amountPHP * 100);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCentavos,
+      currency: "php",
+      metadata: { customer_id, cart_id, shipping_fee }
+    });
+
+    return res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+
+  } catch (err) {
+    console.error("Payment error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------
+// 4️⃣ VERIFY PAYMENT
+// ---------------------------------------------------------
+app.post("/verify-payment", async (req, res) => {
   try {
     const { paymentIntentId } = req.body;
 
@@ -121,25 +115,18 @@ app.post("/verify-payment", express.json(), async (req, res) => {
       return res.status(400).json({ error: "paymentIntentId is required" });
     }
 
-    // Retrieve PaymentIntent from Stripe
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-    // Extract important fields
     const status = pi.status;
-    const amount = pi.amount;              // in centavos
-    const currency = pi.currency;
-    const receiptUrl =
-      pi.charges?.data?.[0]?.receipt_url || null;
+    const amount = pi.amount;
+    const receiptUrl = pi.charges?.data?.[0]?.receipt_url || null;
     const paymentMethod =
       pi.charges?.data?.[0]?.payment_method_details?.card?.brand || "unknown";
 
-    // Convert amount to PHP pesos
-    const amountPHP = amount / 100;
-
     return res.json({
       status,
-      amountPHP,
-      currency,
+      amountPHP: amount / 100,
+      currency: pi.currency,
       receipt_url: receiptUrl,
       payment_method: paymentMethod
     });
@@ -150,8 +137,11 @@ app.post("/verify-payment", express.json(), async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------
+// 5️⃣ Optional health check
+// ---------------------------------------------------------
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "Stripe backend running" });
+});
+
 app.listen(10000, () => console.log("Server running on port 10000"));
-
-
-
-
