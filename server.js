@@ -125,7 +125,10 @@ app.post("/verify-payment", async (req, res) => {
     const { paymentIntentId } = req.body;
     if (!paymentIntentId) return res.status(400).json({ error: "paymentIntentId required" });
 
-    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["charges.data.payment_method_details"]
+    });
+
     const receipt = pi.charges?.data?.[0]?.receipt_url || null;
 
     res.json({
@@ -146,5 +149,6 @@ app.get("/", (req, res) =>
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
