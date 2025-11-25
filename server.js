@@ -72,8 +72,9 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-API-KEY": process.env.INF_API_KEY
+            "X-API-KEY": (process.env.INF_API_KEY || "").trim()
           },
+
           body: JSON.stringify(payload)
         }
       );
@@ -144,3 +145,4 @@ app.get("/", (req, res) =>
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
