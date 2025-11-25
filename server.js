@@ -123,25 +123,29 @@ app.post("/create-payment", async (req, res) => {
 app.post("/verify-payment", async (req, res) => {
   try {
     const { paymentIntentId } = req.body;
-    if (!paymentIntentId) return res.status(400).json({ error: "paymentIntentId required" });
+    if (!paymentIntentId) 
+      return res.status(400).json({ error: "paymentIntentId required" });
 
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-      expand: ["charges.data.payment_method_details"]
+      expand: ["latest_charge.payment_method_details"]
     });
 
-    const receipt = pi.charges?.data?.[0]?.receipt_url || null;
+    const receipt = pi.latest_charge?.receipt_url || null;
+    const brand = pi.latest_charge?.payment_method_details?.card?.brand || "unknown";
 
     res.json({
       status: pi.status,
       amountPHP: (pi.amount || 0) / 100,
       currency: pi.currency,
       receipt_url: receipt,
-      payment_method: pi.charges?.data?.[0]?.payment_method_details?.card?.brand || "unknown"
+      payment_method: brand
     });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get("/", (req, res) =>
   res.json({ status: "ok", message: "Stripe backend running" })
@@ -149,6 +153,7 @@ app.get("/", (req, res) =>
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
 
 
