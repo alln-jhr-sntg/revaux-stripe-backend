@@ -67,17 +67,18 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
     // ------------------------------
     try {
       const response = await fetch(
-        "https://revaux.infinityfree.me/hooks/stripe_confirm.php",
+        "https://revaux.infinityfree.me/hooks/stripe_confirm.php?i=1",
         {
           method: "POST",
+          redirect: "follow",   // <-- THIS MAKES IT FOLLOW THE JS REDIRECT
           headers: {
             "Content-Type": "application/json",
             "X-API-KEY": (process.env.INF_API_KEY || "").trim()
           },
-
           body: JSON.stringify(payload)
         }
       );
+
 
       const txt = await response.text();
       console.log("InfinityFree says:", txt);
@@ -145,4 +146,5 @@ app.get("/", (req, res) =>
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
