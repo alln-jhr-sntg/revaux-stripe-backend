@@ -98,28 +98,23 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
       receipt_url: receiptUrl,
       status: "paid"
     };
-    
-    console.log("API KEY (raw)=", JSON.stringify((process.env.INF_API_KEY || "").trim()));
 
     try {
       const response = await fetch(
-        "https://revaux.infinityfree.me/hooks/stripe_confirm.php?i=1",
+        "https://revaux-stripe-backend.onrender.com/confirm-order",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "X-API-KEY": (process.env.INF_API_KEY || "").trim()
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         }
       );
     
       const txt = await response.text();
-      console.log("InfinityFree says:", txt);
+      console.log("Render confirm-order says:", txt);
     } catch (err) {
-      console.error("❌ Failed to notify InfinityFree:", err.message);
+      console.error("❌ Failed to notify /confirm-order:", err.message);
     }
+
 
     // Attempt direct DB write if DB env provided
     const DB_HOST = process.env.DB_HOST;
@@ -186,6 +181,67 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
   res.json({ received: true });
 });
 
+// -------------------------------
+// CONFIRM ORDER ON RENDER (replaces stripe_confirm.php)
+// -------------------------------
+app.post("/confirm-order", async (req, res) => {
+  const {
+    payment_intent_id,
+    customer_id,
+    cart_id,
+    shipping_fee,
+    amountPHP,
+    receipt_url
+  } = req.body;
+
+  if (!payment_intent_id || !customer_id || !cart_id) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  try {
+    console.log("✔ Writing order to DB...");
+
+    const conn = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASS,
+      database: process.env.DB_NAME,
+      port: Number(process.env.DB_PORT || 3306),
+      connectTimeout: 10000
+    });
+
+    const sql = `
+      INSERT INTO orders 
+      (customer_id, cart_id, total, shipping_fee, payment_method, payment_status, stripe_payment_intent, stripe_receipt_url)
+      VALUES (?, ?, ?, ?, 'Credit Card', 'Paid', ?, ?)
+      ON DUPLICATE KEY UPDATE
+        payment_status = VALUES(payment_status),
+        stripe_payment_intent = VALUES(stripe_payment_intent),
+        stripe_receipt_url = VALUES(stripe_receipt_url)
+    `;
+
+    const params = [
+      customer_id,
+      cart_id,
+      amountPHP,
+      shipping_fee,
+      payment_intent_id,
+      receipt_url || null
+    ];
+
+    const [result] = await conn.execute(sql, params);
+    await conn.end();
+
+    console.log("✔ DB update complete:", result);
+    return res.json({ status: "ok", db: result });
+
+  } catch (err) {
+    console.error("❌ DB write error:", err);
+    return res.status(500).json({ error: "DB update failed", details: err.message });
+  }
+});
+
+
 // --------------------
 // Normal JSON routes
 // --------------------
@@ -239,6 +295,7 @@ app.get("/", (req, res) => res.json({ status: "ok", message: "Stripe backend run
 // start
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => log(`Server running on port ${PORT}`));
+
 
 
 
